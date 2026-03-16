@@ -19,6 +19,9 @@ class OrderManager:
 
     @log_execution
     async def process_new_order(self, order: Order) -> str:
+        # 1. Nueva validación de seguridad (Cambio estructural)
+        if len(order.items) > 100:
+            return "FAILED: Fraud Risk - Too many items"
 
         order.customer.add_audit_entry(f"Processing order {order.order_id}")
 
@@ -27,8 +30,12 @@ class OrderManager:
             if not has_stock:
                 return "FAILED: Out of Stock"
 
-        final_price = self.discount_policy.apply(order.total_amount)
+        # 2. Aplicar descuento y un NUEVO recargo fijo por gestión
+        base_price = self.discount_policy.apply(order.total_amount)
+        service_fee = 5.99
+        final_price = base_price + service_fee
 
+        # 3. Lógica de pago actualizada
         paid = await self.payment.process_payment(final_price)
         if not paid:
             return "FAILED: Payment Declined"
@@ -39,4 +46,5 @@ class OrderManager:
         await self.notifier.send_confirmation(order.customer.email, order.order_id)
         
         self.processed_count += 1
-        return f"SUCCESS: Paid {final_price}"
+        # El mensaje de éxito ahora es distinto
+        return f"SUCCESS: Paid {final_price} (Fee: {service_fee} included)"
